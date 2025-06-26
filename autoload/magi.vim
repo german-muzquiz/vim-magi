@@ -1,5 +1,5 @@
 
-let s:magi_home = expand('~/.magi/magi')
+let s:magi_home = expand('~/.magi')
 
 " Install the magi python backend if not already installed
 function! magi#install_if_needed() abort
