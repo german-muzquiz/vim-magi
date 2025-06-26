@@ -16,6 +16,7 @@ endfunction
 
 " Install the magi python backend
 function! s:install(source, dest) abort
+    echo "Source: " . a:source . ", Destination: " . a:dest
     " Create destination directory
     if !isdirectory(a:dest)
         call mkdir(a:dest, 'p')
