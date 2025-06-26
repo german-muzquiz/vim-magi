@@ -9,7 +9,7 @@ function! magi#install_if_needed() abort
     " Check if installation is needed
     if !isdirectory(s:magi_home) || !filereadable(s:magi_home . '/magi/pyproject.toml')
         echo "Installing vim-magi Python backend..."
-        call s:install(l:python_source, s:magi_home)
+        call s:install(l:python_source, s:magi_home . '/magi')
         echo "vim-magi installation complete!"
     endif
 endfunction
