@@ -6,13 +6,16 @@ let s:magi_settings = expand('~/.magi') . '/config.yml'
 function! magi#init_if_needed() abort
     if !isdirectory(s:magi_home) || !filereadable(s:magi_settings)
         let l:plugin_dir = fnamemodify(resolve(expand('<sfile>:p')), ':h:h')
+        echom 'Plugin directory: ' . l:plugin_dir
 
         if l:plugin_dir =~ 'script '
+            echom "Inside vim-plug context"
             " We're in vim-plug context, extract the path
             let s:plugin_dir = matchstr(l:plugin_dir, 'script \zs\S*')
         endif
 
         let l:python_source = l:plugin_dir . '/magi'
+        echom "Python source: " . l:python_source
 
         echom "Installing vim-magi Python backend..."
         call s:install(l:python_source, s:magi_home . '/magi')
