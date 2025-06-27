@@ -42,6 +42,19 @@ function! s:install(source, dest) abort
     endif
 
     " Copy settings file
-    let l:script_dir = l:python_home . '/autoload'
-    let l:result = system('cp "' . l:script_dir . '/magi/config.yml.template" ' . s:magi_settings . '"')
+    let l:script_dir = a:source . '/autoload'
+    if has('win32') || has('win64')
+        " Windows
+        let l:cmd = 'xcopy /E /I /Y "' . l:script_dir . '/magi/config.yml.template" "' . s:magi_settings . '"'
+    else
+        " Unix/Linux/macOS
+        let l:cmd = 'cp "' . l:script_dir . '/magi/config.yml.template" "' . s:magi_settings . '"'
+    endif
+
+    echom "Copy cmd: " . l:cmd
+    let l:result = system(l:cmd)
+    if v:shell_error != 0
+        echoerr "Failed to copy settings file: " . l:result
+        return
+    endif
 endfunction
