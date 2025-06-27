@@ -1,0 +1,98 @@
+[project]
+name = "vim-magi"
+version = "0.0.0"
+requires-python = ">=3.12"
+readme = "README.md"
+dependencies = [
+    "pydantic-ai>=0.3.4",
+    "pydantic>=2.6.1",
+    "python-dotenv~=1.0",
+    "httpx>=0.24.1",
+    "jinja2>=3.1.6",
+]
+
+[project.urls]
+Homepage = "https://github.com/german-muzquiz/vim-magi"
+Documentation = "https://github.com/german-muzquiz/vim-magi"
+Repository = "https://github.com/german-muzquiz/vim-magi"
+
+# Dependencies used only for development
+[dependency-groups]
+dev = [
+    "mypy-extensions>=1.0.0",
+    "mypy~=1.13.0",
+    "pylint~=3.3.1",
+    "pytest-asyncio~=0.24.0",
+    "pytest~=8.3.3",
+    "ruff~=0.8.0",
+    "types-requests>=2.32.0.20241016",
+]
+
+[[tool.uv.index]]
+name = "pipi"
+url = "https://pypi.org/simple"
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+log_cli = "True"
+log_cli_level = "INFO"
+filterwarnings = [
+    "ignore:datetime.datetime.utcnow():DeprecationWarning:botocore.auth",
+    "ignore:datetime.datetime.utcfromtimestamp():DeprecationWarning:dateutil.tz"
+]
+
+[tool.mypy]
+python_version = "3.12"
+namespace_packages = false
+disable_error_code = "call-arg,misc"
+plugins = "pydantic.mypy"
+
+[[tool.mypy.overrides]]
+ignore_missing_imports = true
+module = [
+    "pydantic_ai.*",
+]
+
+[tool.ruff]
+line-length = 120
+exclude = [
+    ".eggs",
+    ".git",
+    ".mypy_cache",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "build",
+    "dist",
+    "site-packages",
+    "venv",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+skip-magic-trailing-comma = false
+
+[tool.ruff.lint]
+select = ["PL", "F", "I", "E", "W", "C90"]
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.pylint]
+allow-magic-value-types = ["str", "bytes", "int"]
+max-args = 7
+max-bool-expr = 5
+max-branches = 12
+max-locals = 15
+
+
+

@@ -8,3 +8,6 @@ let g:magi_loaded = 1
 " Auto-install on first load
 call magi#init_if_needed()
 
+" Commands
+command! MagiConfig call magi#config()
+
