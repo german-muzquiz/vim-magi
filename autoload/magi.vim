@@ -42,6 +42,6 @@ function! s:install(source, dest) abort
     endif
 
     " Copy settings file
-    let l:script_dir = l:python_home/autoload
+    let l:script_dir = l:python_home . '/autoload'
     let l:result = system('cp "' . l:script_dir . '/magi/config.yml.template" ' . s:magi_settings . '"')
 endfunction
