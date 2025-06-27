@@ -1,0 +1,23 @@
+magi:
+  api_keys:
+    openai: "${OPENAI_API_KEY}"
+    anthropic: "${ANTHROPIC_API_KEY}"
+    google: "${GEMINI_API_KEY}"
+    openrouter: "${OPENROUTER_API_KEY}"
+  workflows:  # cmd values follow the format api|mcp|cli|web[/<vendor>[/<model name>]]
+    chat: 
+      cmd: cli/claude
+    plan: 
+      context_cmd: mcp/repoprompt
+      plan_cmd: mcp/repoprompt
+    execute: 
+      cmd: api/openrouter/anthropic/claude-sonnet-4
+    debug: 
+      cmd: cli/gemini
+  mcp_servers:
+    repoprompt:
+      command: ~/RepoPrompt/repoprompt_cli
+      args: []
+  prompts:
+    dirs:
+      - ~/.magi/prompts

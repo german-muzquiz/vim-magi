@@ -1,22 +1,21 @@
 
 let s:magi_home = expand('~/.magi')
+let s:magi_settings = expand('~/.magi') . '/config.yml'
 
-" Install the magi python backend if not already installed
-function! magi#install_if_needed() abort
-    let l:plugin_dir = fnamemodify(resolve(expand('<sfile>:p')), ':h:h')
-    let l:python_source = l:plugin_dir . '/magi'
+" Initialize the installation if needed
+function! magi#init_if_needed() abort
+    if !isdirectory(s:magi_home) || !filereadable(s:magi_settings)
+        let l:plugin_dir = fnamemodify(resolve(expand('<sfile>:p')), ':h:h')
+        let l:python_source = l:plugin_dir . '/magi'
 
-    " Check if installation is needed
-    if !isdirectory(s:magi_home) || !filereadable(s:magi_home . '/magi/pyproject.toml')
-        echo "Installing vim-magi Python backend..."
+        echom "Installing vim-magi Python backend..."
         call s:install(l:python_source, s:magi_home . '/magi')
-        echo "vim-magi installation complete!"
     endif
 endfunction
 
 " Install the magi python backend
 function! s:install(source, dest) abort
-    echo "Source: " . a:source . ", Destination: " . a:dest
+    echom "Source: " . a:source . ", Destination: " . a:dest
     " Create destination directory
     if !isdirectory(a:dest)
         call mkdir(a:dest, 'p')
@@ -34,5 +33,11 @@ function! s:install(source, dest) abort
     let l:result = system(l:cmd)
     if v:shell_error != 0
         echoerr "Failed to copy Python backend: " . l:result
+        return
     endif
+
+    " Copy settings file
+    let l:script_dir = resolve(expand('<sfile>:p'))
+    echom "Script dir: " . l:script_dir
+    let l:result = system('cp "' . l:script_dir . '/magi/config.yml.template" ' . s:magi_settings . '"')
 endfunction
