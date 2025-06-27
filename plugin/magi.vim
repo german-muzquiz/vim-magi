@@ -6,5 +6,5 @@ endif
 let g:magi_loaded = 1
 
 " Auto-install on first load
-call magi#install_if_needed()
+call magi#init_if_needed()
 
