@@ -37,38 +37,66 @@ Available commands
 
 ## Configuration
 
-Running the command `MagiConfig` will open the configuration file located at `~/.magi/config.yml`.
+Running the command `MagiConfig` will open the configuration file located at `~/.magi/config.json`.
 
-```yaml
-magi:
-  api_keys:
-    openai: "sk-..."
-    anthropic: "..."
-    google: "..."
-    openrouter: "..."
-  workflows:  # cmd values follow the format api|mcp|cli|web[/<vendor>[/<model name>]]
-    chat: 
-      cmd: cli/claude
-    plan: 
-      context_cmd: mcp/repoprompt
-      plan_cmd: mcp/repoprompt
-    execute: 
-      cmd: api/openrouter/anthropic/claude-sonnet-4
-    debug: 
-      cmd: cli/gemini
-  mcp_servers:
-    repoprompt:
-      command: ~/RepoPrompt/repoprompt_cli
-      args: []
-  prompts:
-    dirs:
-      - ~/.magi/prompts
+```json
+{
+  "magi": {
+    "api_keys": {
+      "openai": "sk-...",
+      "anthropic": "...",
+      "google": "...",
+      "openrouter": "..."
+    },
+    "workflows": {
+      "chat": {
+        "cmd": "cli/claude"
+      },
+      "plan": {
+        "context_cmd": "mcp/repoprompt",
+        "plan_cmd": "mcp/repoprompt"
+      },
+      "execute": {
+        "cmd": "api/openrouter/anthropic/claude-sonnet-4"
+      },
+      "debug": {
+        "cmd": "cli/gemini"
+      }
+    },
+    "mcp_servers": {
+      "repoprompt": {
+        "command": "~/RepoPrompt/repoprompt_cli",
+        "args": []
+      }
+    },
+    "prompts": {
+      "dirs": [
+        "~/.magi/prompts"
+      ]
+    }
+  }
+}
 ```
 
-The config file can reference environment variables:
+### Configuration Options
 
-```yaml
-magi:
-  api_keys:
-    openai: "$OPENAI_API_KEY"
+- **api_keys**: Store your API keys for different AI providers
+- **workflows**: Define commands for different AI workflows. Command values follow the format `api|mcp|cli|web[/<vendor>[/<model name>]]`
+  - **chat**: Interactive chat interface
+  - **plan**: Planning workflow with context and plan commands
+  - **execute**: Code execution workflow
+  - **debug**: Debugging workflow
+- **mcp_servers**: Configuration for MCP (Model Context Protocol) servers
+- **prompts**: Directories containing custom prompts
+
+The config file can reference environment variables using `${VAR_NAME}` syntax:
+
+```json
+{
+  "magi": {
+    "api_keys": {
+      "openai": "${OPENAI_API_KEY}"
+    }
+  }
+}
 ```

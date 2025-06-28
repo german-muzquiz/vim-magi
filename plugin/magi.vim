@@ -10,4 +10,7 @@ call magi#init_if_needed()
 
 " Commands
 command! MagiConfig call magi#config()
-
+command! Magi call magi#chat()
+command! MagiPlan call magi#unimplemented()
+command! MagiExecute call magi#unimplemented()
+command! MagiDebug call magi#unimplemented()
