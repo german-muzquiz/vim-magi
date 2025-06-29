@@ -190,7 +190,7 @@ function! magi#launch_fullscreen_cli(command, tab_name) abort
 
         " Set a friendly name for the tab/buffer
         silent file `=a:tab_name`
-        setlocal buftype=nofile bufhidden=hide noswapfile
+        setlocal buftype=nofile bufhidden=hide noswapfile nobuflisted
 
         " Mappings to switch back to code
         tnoremap <buffer> <silent> <C-s> <C-\><C-n>:call <SID>switch_to_return_tab()<CR>
