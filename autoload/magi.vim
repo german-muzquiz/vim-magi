@@ -1,6 +1,6 @@
 
 " Global variables
-let g:magi_chat_tab_id = -1
+let g:magi_tab_id = -1
 
 let s:magi_home = expand('~/.magi')
 let s:magi_settings = expand('~/.magi') . '/config.json'
@@ -135,6 +135,24 @@ function! s:expand_env_vars(data) abort
 endfunction
 
 
+" --- Plan functionality ---
+
+" Opens the Magi plan interface
+function! magi#plan() abort
+    let l:settings = s:load_config()
+    if empty(l:settings)
+        return
+    endif
+    
+    call magi#launch_magi_buffer()
+endfunction
+
+" Send command to terminal after a delay
+function! s:send_keys_to_terminal(job, keys, timer_id) abort
+    call feedkeys("/" . a:keys, "n")
+endfunction
+
+
 " --- Chat functionality ---
 
 " Opens the Magi chat interface
@@ -158,48 +176,100 @@ endfunction
 " Implementation for cli based chat
 function! magi#launch_fullscreen_cli(command, tab_name) abort
     " Check if the Magi tab already exists and is valid
-    if g:magi_chat_tab_id != -1 && len(tabpagebuflist(g:magi_chat_tab_id)) > 0 && getbufvar(tabpagebuflist(g:magi_chat_tab_id)[0], 'is_magi_term', 0)
-        execute 'tabnext ' . g:magi_chat_tab_id
+    if g:magi_tab_id != -1 && len(tabpagebuflist(g:magi_tab_id)) > 0 && getbufvar(tabpagebuflist(g:magi_tab_id)[0], 'is_magi_tab', 0)
+        execute 'tabnext ' . g:magi_tab_id
         call feedkeys("i", "n")
-    else
-        if !executable(split(a:command)[0])
-            echoerr "Magi: '" . a:command . "' executable not found in your PATH."
-            return
-        endif
-
-        let l:current_tab = tabpagenr()
-
-        tabnew
-
-        let g:magi_chat_tab_id = tabpagenr()
-
-        try
-            "execute 'terminal ++curwin ' . a:command
-            let l:job = term_start(a:command, {
-                \ 'curwin': 1,
-                \ 'exit_cb': function('s:cleanup_terminal_tab')
-                \ })
-        catch
-            echoerr "Magi: Failed to launch terminal command: " . a:command
-            tabclose
-            return
-        endtry
-
-        let b:is_magi_term = 1
-        let b:magi_return_tab = l:current_tab
-
-        " Set a friendly name for the tab/buffer
-        silent file `=a:tab_name`
-        setlocal buftype=nofile bufhidden=hide noswapfile nobuflisted
-
-        " Mappings to switch back to code
-        tnoremap <buffer> <silent> <C-s> <C-\><C-n>:call <SID>switch_to_return_tab()<CR>
-        nnoremap <buffer> <silent> <C-s> :call <SID>switch_to_return_tab()<CR>
-
-        echom "Magi: Started session in new tab. Press Ctrl-s to switch back to your code."
-
-        return l:job
+        return
     endif
+
+    if !executable(split(a:command)[0])
+        echoerr "Magi: '" . a:command . "' executable not found in your PATH."
+        return
+    endif
+
+    let l:current_tab = tabpagenr()
+
+    tabnew
+
+    let g:magi_tab_id = tabpagenr()
+
+    try
+        let l:job = term_start(a:command, {
+            \ 'curwin': 1,
+            \ 'exit_cb': function('s:cleanup_terminal_tab')
+            \ })
+    catch
+        echoerr "Magi: Failed to launch terminal command: " . a:command
+        tabclose
+        return
+    endtry
+
+    let b:is_magi_tab = 1
+    let b:magi_return_tab = l:current_tab
+
+    " Set a friendly name for the tab/buffer
+    " Check if buffer with this name already exists and delete it first
+    let l:existing_buf = bufnr(a:tab_name)
+    if l:existing_buf != -1 && l:existing_buf != bufnr('%')
+        try
+            execute 'bdelete! ' . l:existing_buf
+        catch
+            " Ignore
+        endtry
+    endif
+    silent file `=a:tab_name`
+    setlocal buftype=nofile bufhidden=hide noswapfile nobuflisted
+
+    " Mappings to switch back to code
+    tnoremap <buffer> <silent> <C-s> <C-\><C-n>:call <SID>switch_to_return_tab()<CR>
+    nnoremap <buffer> <silent> <C-s> :call <SID>switch_to_return_tab()<CR>
+
+    echom "Magi: Started session in new tab. Press Ctrl-s to switch back to your code."
+
+    return l:job
+endfunction
+
+
+" Launch magi buffer in separate tab or switch to it
+function! magi#launch_magi_buffer() abort
+    " Check if the Magi tab already exists and is valid
+    if g:magi_tab_id != -1 && len(tabpagebuflist(g:magi_tab_id)) > 0 && getbufvar(tabpagebuflist(g:magi_tab_id)[0], 'is_magi_tab', 0)
+        execute 'tabnext ' . g:magi_tab_id
+        return
+    endif
+    
+    let l:current_tab = tabpagenr()
+
+    tabnew
+
+    let g:magi_tab_id = tabpagenr()
+    let b:is_magi_tab = 1
+    let b:magi_return_tab = l:current_tab
+    
+    " Set buffer properties
+    setlocal buftype=nofile bufhidden=hide noswapfile nobuflisted
+    
+    " Set buffer name
+    file MagiPlan
+    
+    " Insert initial content
+    call setline(1, ' Write your instructions')
+    call setline(2, '')
+    call setline(3, ' <leader>x  prepare plan')
+    call setline(4, ' <C-s>      go back to previous tab ')
+    call setline(5, '-----------------------------------------------------------------')
+    call setline(6, '')
+    call setline(7, '')
+    
+    " Set filetype for syntax highlighting
+    setlocal filetype=magi
+    
+    " Configure keybindings
+    nnoremap <buffer> <C-s> :call <SID>switch_to_return_tab()<CR>
+    inoremap <buffer> <C-s> <Esc>:call <SID>switch_to_return_tab()<CR>
+    
+    " Position cursor for editing
+    normal! G
 endfunction
 
 
@@ -216,9 +286,9 @@ endfunction
 
 " Cleanup when the terminal process exits
 function! s:cleanup_terminal_tab(job, exit_status) abort
-    if tabpagenr() == g:magi_chat_tab_id
-        let l:tab_to_close = g:magi_chat_tab_id
-        let g:magi_chat_tab_id = -1 " Reset global var
+    if tabpagenr() == g:magi_tab_id
+        let l:tab_to_close = g:magi_tab_id
+        let g:magi_tab_id = -1 " Reset global var
         execute 'bdelete! '
         " Only close tab if it's not the last one
         if tabpagenr('$') > 1
