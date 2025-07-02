@@ -1,10 +1,18 @@
 
 " Global variables
-let g:magi_tab_id = -1
+" Stores tab IDs for different magi commands, e.g., {'chat': 1001, 'plan': 1002}
+if !exists('g:magi_tabs')
+    let g:magi_tabs = {}
+endif
+
+" Stores the key of the last run magi command, e.g., 'chat' or 'plan'
+if !exists('g:magi_last_command')
+    let g:magi_last_command = ''
+endif
 
 let s:magi_home = expand('~/.magi')
 let s:magi_settings = expand('~/.magi') . '/config.json'
-let s:magi_last_active_tab = -1
+
 
 " Initialize the installation if needed
 function! magi#init_if_needed() abort
@@ -135,16 +143,62 @@ function! s:expand_env_vars(data) abort
 endfunction
 
 
+" --- Tab Management Functions ---
+
+" Returns a valid tab ID for a given key, or -1 if not found/invalid.
+" Cleans up stale entries from g:magi_tabs.
+function! s:get_magi_tab(key) abort
+    let l:tab_id = -1
+    for l:tabnr in range(1, tabpagenr('$'))
+        let l:buflist = tabpagebuflist(l:tabnr)
+        for l:bufnr in l:buflist
+            if getbufvar(l:bufnr, 'is_magi_tab', 0)
+                let l:magi_key = getbufvar(l:bufnr, 'magi_key', '')
+                if l:magi_key ==# a:key
+                    let l:tab_id = l:tabnr
+                    break
+                endif
+            endif
+        endfor
+    endfor
+
+    if l:tab_id == -1
+        return -1
+    endif
+
+    " Check if tab and its buffer still exist and is a magi tab
+    if tabpagenr('$') >= l:tab_id && len(tabpagebuflist(l:tab_id)) > 0 && getbufvar(tabpagebuflist(l:tab_id)[0], 'is_magi_tab', 0)
+        return l:tab_id
+    else
+        " Stale entry, remove it
+        call remove(g:magi_tabs, a:key)
+        return -1
+    endif
+endfunction
+
+" Creates a new tab, registers it, and returns the new tab ID.
+function! s:create_magi_tab(key) abort
+    tabnew
+    let l:new_tab_id = tabpagenr()
+
+    " Register the new tab
+    let g:magi_tabs[a:key] = l:new_tab_id
+
+    return l:new_tab_id
+endfunction
+
 " --- Plan functionality ---
 
 " Opens the Magi plan interface
 function! magi#plan() abort
+    let g:magi_last_command = 'plan'
+    
     let l:settings = s:load_config()
     if empty(l:settings)
         return
     endif
     
-    call magi#launch_magi_buffer()
+    call magi#launch_magi_buffer('plan')
 endfunction
 
 " Send command to terminal after a delay
@@ -157,6 +211,8 @@ endfunction
 
 " Opens the Magi chat interface
 function! magi#chat() abort
+    let g:magi_last_command = 'chat'
+    
     let l:settings = s:load_config()
     if empty(l:settings)
         return
@@ -166,18 +222,28 @@ function! magi#chat() abort
     let l:chat_cmd = get(l:chat_cmd_config, 'cmd', 'cli/claude')
 
     if l:chat_cmd =~ '^cli/'
-        call magi#launch_fullscreen_cli(substitute(l:chat_cmd, 'cli/', '', ''), 'Magi (claude)')
+        call magi#launch_fullscreen_cli(substitute(l:chat_cmd, 'cli/', '', ''), 'Magi (claude)', 'chat')
     else
         echom "Unsupported chat command: " . l:chat_cmd
     endif
 endfunction
 
+" Reruns the last Magi command, or defaults to chat.
+function! magi#rerun_last() abort
+    if g:magi_last_command ==# 'plan'
+        call magi#plan()
+    else " Default to chat if empty or anything else
+        call magi#chat()
+    endif
+endfunction
+
 
 " Implementation for cli based chat
-function! magi#launch_fullscreen_cli(command, tab_name) abort
+function! magi#launch_fullscreen_cli(command, tab_name, key) abort
     " Check if the Magi tab already exists and is valid
-    if g:magi_tab_id != -1 && len(tabpagebuflist(g:magi_tab_id)) > 0 && getbufvar(tabpagebuflist(g:magi_tab_id)[0], 'is_magi_tab', 0)
-        execute 'tabnext ' . g:magi_tab_id
+    let l:tab_id = s:get_magi_tab(a:key)
+    if l:tab_id != -1
+        execute 'tabnext ' . l:tab_id
         call feedkeys("i", "n")
         return
     endif
@@ -188,15 +254,12 @@ function! magi#launch_fullscreen_cli(command, tab_name) abort
     endif
 
     let l:current_tab = tabpagenr()
-
-    tabnew
-
-    let g:magi_tab_id = tabpagenr()
+    call s:create_magi_tab(a:key)
 
     try
         let l:job = term_start(a:command, {
             \ 'curwin': 1,
-            \ 'exit_cb': function('s:cleanup_terminal_tab')
+            \ 'exit_cb': function('s:cleanup_terminal_tab', [a:key, bufnr('%')])
             \ })
     catch
         echoerr "Magi: Failed to launch terminal command: " . a:command
@@ -204,9 +267,11 @@ function! magi#launch_fullscreen_cli(command, tab_name) abort
         return
     endtry
 
+    " Set buffer variables for identification and navigation
     let b:is_magi_tab = 1
+    let b:magi_key = a:key
     let b:magi_return_tab = l:current_tab
-
+    
     " Set a friendly name for the tab/buffer
     " Check if buffer with this name already exists and delete it first
     let l:existing_buf = bufnr(a:tab_name)
@@ -231,25 +296,34 @@ endfunction
 
 
 " Launch magi buffer in separate tab or switch to it
-function! magi#launch_magi_buffer() abort
+function! magi#launch_magi_buffer(key) abort
     " Check if the Magi tab already exists and is valid
-    if g:magi_tab_id != -1 && len(tabpagebuflist(g:magi_tab_id)) > 0 && getbufvar(tabpagebuflist(g:magi_tab_id)[0], 'is_magi_tab', 0)
-        execute 'tabnext ' . g:magi_tab_id
+    let l:tab_id = s:get_magi_tab(a:key)
+    if l:tab_id != -1
+        execute 'tabnext ' . l:tab_id
         return
     endif
     
     let l:current_tab = tabpagenr()
-
-    tabnew
-
-    let g:magi_tab_id = tabpagenr()
+    call s:create_magi_tab(a:key)
+    
+    " Set buffer variables for identification and navigation
     let b:is_magi_tab = 1
+    let b:magi_key = a:key
     let b:magi_return_tab = l:current_tab
     
     " Set buffer properties
     setlocal buftype=nofile bufhidden=hide noswapfile nobuflisted
     
-    " Set buffer name
+    " Set buffer name - check if buffer with this name already exists and delete it first
+    let l:existing_buf = bufnr('MagiPlan')
+    if l:existing_buf != -1 && l:existing_buf != bufnr('%')
+        try
+            execute 'bdelete! ' . l:existing_buf
+        catch
+            " Ignore
+        endtry
+    endif
     file MagiPlan
     
     " Insert initial content
@@ -285,14 +359,27 @@ endfunction
 
 
 " Cleanup when the terminal process exits
-function! s:cleanup_terminal_tab(job, exit_status) abort
-    if tabpagenr() == g:magi_tab_id
-        let l:tab_to_close = g:magi_tab_id
-        let g:magi_tab_id = -1 " Reset global var
-        execute 'bdelete! '
-        " Only close tab if it's not the last one
-        if tabpagenr('$') > 1
-            execute 'tabclose ' . l:tab_to_close
-        endif
+function! s:cleanup_terminal_tab(key, bufnr, job, exit_status) abort
+    " Remove the key from the magi tabs registry
+    if !empty(a:key) && has_key(g:magi_tabs, a:key)
+        echom 'removing key: ' . a:key
+        call remove(g:magi_tabs, a:key)
+    endif
+
+    " Clean up the buffer/tab if it still exists and is a magi tab
+    " Find the tab that contains this buffer
+    if getbufvar(a:bufnr, 'is_magi_tab', 0)
+        for l:tabnr in range(1, tabpagenr('$'))
+            let l:buflist = tabpagebuflist(l:tabnr)
+            if index(l:buflist, a:bufnr) >= 0
+                " Switch to the tab and close it
+                execute 'tabnext ' . l:tabnr
+                execute 'bdelete! ' . a:bufnr
+                if tabpagenr('$') > 1
+                    tabclose
+                endif
+                break
+            endif
+        endfor
     endif
 endfunction
