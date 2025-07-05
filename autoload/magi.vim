@@ -13,6 +13,20 @@ endif
 let s:magi_home = expand('~/.magi')
 let s:magi_settings = expand('~/.magi') . '/config.json'
 
+" Buffer headers for different magi types
+let s:section_divider = '-------------------------------------------------------------------------------------'
+let s:magi_headers = {
+    \ 'plan': [
+    \   ' Write your instructions for elaborating the plan.',
+    \   '',
+    \   ' <leader>mf  add files to context           <leader>x   generate plan',
+    \   ' <leader>mp  add prompts to context         <C-s>       go back to previous tab ',
+    \   '-------------------------------------------------------------------------------------',
+    \   '',
+    \   ''
+    \ ]
+\ }
+
 
 " Initialize the installation if needed
 function! magi#init_if_needed() abort
@@ -326,14 +340,13 @@ function! magi#launch_magi_buffer(key) abort
     endif
     file MagiPlan
     
-    " Insert initial content
-    call setline(1, ' Write your instructions')
-    call setline(2, '')
-    call setline(3, ' <leader>x  prepare plan')
-    call setline(4, ' <C-s>      go back to previous tab ')
-    call setline(5, '-----------------------------------------------------------------')
-    call setline(6, '')
-    call setline(7, '')
+    " Insert initial content based on key
+    if has_key(s:magi_headers, a:key)
+        let l:header_lines = s:magi_headers[a:key]
+        for l:i in range(len(l:header_lines))
+            call setline(l:i + 1, l:header_lines[l:i])
+        endfor
+    endif
     
     " Set filetype for syntax highlighting
     setlocal filetype=magi
@@ -341,6 +354,8 @@ function! magi#launch_magi_buffer(key) abort
     " Configure keybindings
     nnoremap <buffer> <C-s> :call <SID>switch_to_return_tab()<CR>
     inoremap <buffer> <C-s> <Esc>:call <SID>switch_to_return_tab()<CR>
+    nnoremap <buffer><nowait> <leader>mf :call magi#add_file()<CR>
+    nnoremap <buffer><nowait> <leader>mp :call magi#add_prompt()<CR>
     
     " Position cursor for editing
     normal! G
@@ -382,4 +397,169 @@ function! s:cleanup_terminal_tab(key, bufnr, job, exit_status) abort
             endif
         endfor
     endif
+endfunction
+
+
+" Load prompts from directories specified in config
+function! s:load_prompts_from_config(settings) abort
+    let l:prompts = []
+    
+    let l:prompt_dirs = get(get(get(a:settings, 'magi', {}), 'prompts', {}), 'dirs', [])
+    
+    for l:dir in l:prompt_dirs
+        let l:expanded_dir = expand(l:dir)
+        if isdirectory(l:expanded_dir)
+            let l:prompt_files = glob(l:expanded_dir . '/*', 0, 1)
+            for l:file in l:prompt_files
+                if filereadable(l:file) && !isdirectory(l:file)
+                    let l:filename = fnamemodify(l:file, ':t')
+                    call add(l:prompts, l:filename)
+                endif
+            endfor
+        endif
+    endfor
+    
+    return sort(l:prompts)
+endfunction
+
+
+" Function to inject a file path using fzf
+function! magi#add_file() abort
+    " Use fzf to select a file
+    call fzf#run({
+        \ 'options': ['--prompt', 'Select file to include as context: '],
+        \ 'window': { 'width': 0.8, 'height': 0.5, 'border_color': '#ffff00', 'border_label': 'Select a file to include' },
+        \ 'sink':    function('s:on_file_selected_fzf', [bufnr('%')])})
+endfunction
+
+function! s:on_file_selected_fzf(bufnr, selected_file) abort
+    call s:on_entry_selected_fzf(a:selected_file, 'file', a:bufnr)
+endfunction
+
+
+" Function to inject a prompt using fzf
+function! magi#add_prompt() abort
+    let l:settings = s:load_config()
+    if empty(l:settings)
+        return
+    endif
+    
+    let l:prompts = s:load_prompts_from_config(l:settings)
+    
+    if empty(l:prompts)
+        echom "Magi: No prompts found in configured directories"
+        return
+    endif
+
+    " Use fzf to select a prompt
+    call fzf#run({
+        \ 'source':  l:prompts,
+        \ 'options': ['--prompt', 'Select prompt to include as context: '],
+        \ 'window': { 'width': 0.8, 'height': 0.5, 'border_color': '#ffff00', 'border_label': 'Select a prompt to include' },
+        \ 'sink':    function('s:on_prompt_selected_fzf', [bufnr('%')])})
+endfunction
+
+function! s:on_prompt_selected_fzf(bufnr, selected_prompt) abort
+    call s:on_entry_selected_fzf(a:selected_prompt, 'prompt', a:bufnr)
+endfunction
+
+
+" Sink function for fzf entry selection
+function! s:on_entry_selected_fzf(selected_entry, type, bufnr) abort
+    if empty(a:selected_entry)
+        " User cancelled fzf
+        return
+    endif
+
+    " Get all lines from the buffer
+    let l:original_lines = getline(1, '$')
+    let l:header = s:magi_headers[b:magi_key]
+
+    " --- Parsing ---
+    let l:header_end_idx = len(l:header) - 1 " 0-indexed end of header
+    let l:header_lines = l:original_lines[0 : l:header_end_idx - 1]
+
+    " Find the divider line number
+    let l:divider_start_idx = -1
+    for l:i in range(l:header_end_idx + 1, len(l:original_lines) - 1)
+        if l:original_lines[l:i] == s:section_divider
+            let l:divider_start_idx = l:i
+            break
+        endif
+    endfor
+
+    let l:context_lines = []
+    let l:prompt_lines = []
+
+    if l:divider_start_idx != -1
+        " Lines between header and divider
+        let l:context_lines = l:original_lines[l:header_end_idx : l:divider_start_idx]
+        " Lines after divider
+        let l:prompt_lines = l:original_lines[l:divider_start_idx + 1 :] " Lines *after* the divider
+    else
+        " No divider found, all lines after header are considered prompt lines
+        let l:context_lines = [] " No context lines if no divider
+        let l:prompt_lines = l:original_lines[l:header_end_idx + 1 :]
+    endif
+
+    let l:file_entries = []
+    let l:prompt_entries = []
+
+    " Process context lines to separate entries and other content
+    for l:line in l:context_lines
+        if l:line =~ '^@file:'
+            call add(l:file_entries, l:line)
+        elseif l:line =~ '^@prompt:'
+            call add(l:prompt_entries, l:line)
+        endif
+    endfor
+
+    " --- Add new entry ---
+    let l:new_entry_line = ''
+    if a:type == 'file'
+        let l:absolute_path = fnamemodify(a:selected_entry, ':p')
+        let l:new_entry_line = '@file:' . l:absolute_path
+        if index(l:file_entries, l:new_entry_line) == -1
+            call add(l:file_entries, l:new_entry_line)
+        endif
+    elseif a:type == 'prompt'
+        let l:new_entry_line = '@prompt:' . a:selected_entry
+        if index(l:prompt_entries, l:new_entry_line) == -1
+            call add(l:prompt_entries, l:new_entry_line)
+        endif
+    endif
+
+    " Sort entry lines for consistency
+    call sort(l:file_entries)
+    call sort(l:prompt_entries)
+
+    " --- Construct new buffer content ---
+    let l:new_lines = []
+    call extend(l:new_lines, l:header_lines)
+
+    if len(l:file_entries) > 0
+        call extend(l:new_lines, l:file_entries)
+        call add(l:new_lines, '') " Blank line after files
+    endif
+
+    if len(l:prompt_entries) > 0
+        call extend(l:new_lines, l:prompt_entries)
+        call add(l:new_lines, '') " Blank line after files
+    endif
+
+    if len(l:file_entries) > 0 || len(l:prompt_entries) > 0
+        call add(l:new_lines, s:section_divider)
+    endif
+
+    " Add the original footer lines (lines that were originally after the divider)
+    call extend(l:new_lines, l:prompt_lines)
+
+    " Replace the buffer content
+    " Need to clear buffer first, then set lines
+    silent %delete _
+    call setbufline(a:bufnr, 1, l:new_lines)
+
+    " Move cursor to the end of the newly injected sections (after the divider and other lines)
+    let l:cursor_line = len(l:new_lines) - len(l:prompt_lines) + 1
+    call cursor(l:cursor_line, 1)
 endfunction

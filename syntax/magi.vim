@@ -1,10 +1,12 @@
 " Syntax highlighting for Magi buffers
 if exists('b:current_syntax') | finish | endif
 
-" Highlight lines starting with //
-syntax region magiComment start="\%^" end=/^-----------------------------------------------------------------$/
+syntax region magiHeader start="\%^" end=/^-------------------------------------------------------------------------------------$/
+syntax match magiDivider /^-------------------------------------------------------------------------------------$/
+syntax match filePathReference /^@.*/ 
 
-" Link to standard comment highlighting
-hi def link magiComment Comment
+highlight default link magiHeader Comment
+highlight default link magiDivider Comment
+highlight default link filePathReference Identifier
 
 let b:current_syntax = 'magi'
